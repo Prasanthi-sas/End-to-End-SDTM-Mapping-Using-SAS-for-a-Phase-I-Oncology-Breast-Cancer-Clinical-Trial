@@ -24,7 +24,7 @@ End-to-End-SDTM-Mapping-Using-SAS-for-a-Phase-I-Oncology-Breast-Cancer-Clinical-
 │   ├── lb_synthetic.csv
 │   ├── rs_synthetic.csv
 │   ├── tr_synthetic.csv
-│   └── tte_synthetic.csv
+│   └── tu_synthetic.csv
 │
 ├── sas_code/
 │   ├── dm_mapping.sas
