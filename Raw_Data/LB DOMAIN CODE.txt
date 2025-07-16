@@ -1,0 +1,282 @@
+
+
+
+
+libname raw "C:\Users\cnuma\Desktop\MYSCT TLFS\sct\SDTM\LB\LB\raw data";
+
+proc copy in=raw out=work;
+run;
+
+
+data lb01;
+length specimen coll_unit $100;
+set 
+    lab_chem(in=inchem)
+    lab_hema(in=inhema)
+	lab_urin(in=inurin)
+	;
+studyid=left(STUDY);
+domain='LB';
+usubjid=catx('-',study,pt);
+lbtestcd=left(test);
+
+LENGTH LBCAT $100;
+if inhema then lbcat='HEMATOLOGY';
+else if inchem then lbcat='CHEMISTRY';
+ELSE IF inurin then lbcat='UNRIANLYSIS';
+
+lborres=left(COLL_RSLT);
+lborresu=left(coll_unit);
+lbornrlo=left(lower);
+lbornrhi=left(upper);
+lbspec=left(specimen);
+if lbdt_raw ne '' then lbdtc=put(input(lbdt_raw,??date11.),yymmdd10.);
+	run;
+
+
+proc sql;
+create table lb02 as select a.*,
+                            b.lbtest,
+							b.lbstresu,
+							b.CONVERSION,
+							b.DECIMALS
+							from lb01 as a
+							left join
+							 lab_meta as b
+							 on a.test=b.lbtestcd and a.coll_unit=b.lborresu;
+quit;
+
+
+/*
+1) Fetch CONVERSION value and DECIMAL value from lab_meta
+by merging at TEST and UNIT level (lab.TEST=meta.LBTESTCD 
+and lab.COLL_UNIT=meta.LBORRESU).
+2) Where applicable, convert the numeric component of COLL_RSLT
+to standard unit by multiplying with conversion factor.
+
+3) Round the resulting value to number of decimals specified
+in the metadata.
+4) If there exists special characters like 
+'<', '<=', '>', '>=' , concatenate these symbols back
+to the standard result.
+Same methodology is applicable for other similar variables,
+entire derivation logic is not repeated in other places.
+*/
+/**/
+/*lborres----------lbstresc  lbstresn*/
+/*lbornrlo---------lbstnrlo*/
+/*lbornrhi---------lbstnrhi*/
+/*                    lbstresn   lbstresc   lbstnrlo lbstnrhi*/
+/*5                      25*/
+/*<840                             <1680*/
+/*<=38490*/
+/*>23784*/
+/*>83748*/
+/**/
+/*orig    spl  num       num    std   stresc*/
+/*<840    <     840      840    1640   <1640*/
+/**/
+/*;*/
+
+data lb03;
+set lb02; 
+
+array origvars{3}  lborres lbornrlo lbornrhi;
+array tempsigns{3} $ tempsign1 tempsign2 tempsign3;
+array tempresns{3}  tempresns1 tempresns2 tempresns3;
+array stresns{3} stresns1 stresns2 stresns3;
+array nstdvars{3} lbstresn stdlow stdhigh;
+array cstdvars{3} $ lbstresc stdlowc stdhighc;
+do i=1 to 3;
+
+if substr(origvars{i},1,2) in ("<=" ">=") then do;
+tempresns{i}=input(substr(origvars{i},3),??best.);
+tempsigns{i}=substr(origvars{i},1,2);
+end;
+
+
+else if substr(origvars{i},1,1) in ("<" ">") then do;
+tempresns{i}=input(substr(origvars{i},2),??best.);
+tempsigns{i}=substr(origvars{i},1,1);
+end;
+
+else tempresns{i}=input(origvars{i},??best.);
+
+
+if decimals ne . then roundto=10**(-1*decimals);
+
+if nmiss(tempresns{i},conversion)=0 then do;
+
+stresns{i}=tempresns{i}*conversion;
+stresns{i}=round(stresns{i},roundto);
+end;
+
+if tempsigns{i} eq '' then do;
+
+nstdvars{i}=stresns{i};
+cstdvars{i}=strip(put(stresns{i},best.));
+end;
+
+if tempsigns{i} ne '' then do;
+if stresns{i} ne . then cstdvars{i}= cats(tempsigns{i},put(stresns{i},best.));
+end;
+
+end;
+
+lbstnrlo=stdlow;
+lbstnrhi=stdhigh;
+
+/*lbnrind
+Derived using LBSTNRLO, LBSTNRHI and LBSTRESN.
+1) For the lab tests where lower limit and upper limit are available,
+populae as "HIGH" if the result is greater than upper limit,
+populate as "LOW" if the result is lower than lower limit,
+else populate as "NORMAL" when result is not null.
+2) For the lab tests where only lower limit is available, 
+populate as "LOW" if result is less than the lower limit,
+else populate as "NORMAL" if result is greater than or 
+equals to lower limit.*/
+
+
+length lbnrind $50;
+if lbstnrlo ne . and lbstnrhi ne . and lbstresn ne . then do;
+
+if lbstresn lt lbstnrlo then lbnrind='LOW';
+else if lbstresn gt lbstnrhi then lbnrind='HIGH';
+else if lbstnrlo lt lbstresn le lbstnrhi then lbnrind='NORMAL';
+
+end;
+
+if lbstnrlo ne . and lbstnrhi eq . then do;
+if lbstresn lt lbstnrlo then lbnrind='LOW';
+else if lbstresn ge lbstnrlo then lbnrind='NORMAL';
+
+end;
+run;
+
+
+
+data lb04;
+set lb03;
+
+if FOLDER='SCR' then do;
+visitnum=1;
+visit='SCREENING';
+end;
+if index(upcase(folder),'WEEK') then do;
+visitnum=100+input(compress(folder,,'KD'),??best.);
+visit=upcase(folder);
+end;
+
+if substr(upcase(folder),1,2)='FU' then do;
+visitnum=200+input(compress(folder,,'KD'),??best.);
+
+visit=tranwrd(upcase(folder),'FU','FOLLOW-UP');
+end;
+run;
+
+
+/*lbdy*/
+
+proc sort data=lb04;
+by usubjid;run;
+
+proc sort data=dm;
+by usubjid;
+run;
+
+data lb05;
+merge lb04(in=a) dm(in=b keep=usubjid rfstdtc);
+by usubjid;
+if a;
+
+lbdt=input(lbdtc,??yymmdd10.);
+rfstd=input(rfstdtc,??yymmdd10.);
+
+if lbdt ge rfstd then lbdy=(lbdt-rfstd)+1;
+else if lbdt lt rfstd then lbdy=(lbdt-rfstd);
+run;
+
+/**/
+/*/*blfl*/*/
+/*rfstdtc      13/1*/
+/**/
+/**/
+/*1001 bc glucose  210 10/1/25*/
+/*1001 bc glucose  218 12/1/25      Y*/
+/*1001 bc glucose  200 14/1/25*/
+/*1001 bc glucose  190 16/1/25*/
+/*1001 bc glucose  170 18/1/25*/
+/*1001 bc glucose  160 20/1/25*/
+/*1001 ur glucose  110 10/1/25*/
+/*1001 ur glucose  110 12/1/25      Y*/
+/*1001 ur glucose  090 14/1/25*/
+/*1001 ur glucose  080 16/1/25*/
+/*1001 ur glucose  087 18/1/25*/
+/*1001 ur glucose  090 20/1/25*/
+/**/
+/**/
+/*if lbdtc le rfstdtc lborres ne .*/
+/**/
+/*1001 bc glucose  210 10/1/25*/
+/*1001 bc glucose  218 12/1/25 */
+/*1001 ur glucose  110 10/1/25*/
+/*1001 ur glucose  110 12/1/25  */
+/**/
+/*if last.testcd*/
+/*1001 bc glucose  218 12/1/25 */
+/*1001 ur glucose  110 12/1/25*/
+
+;
+
+
+proc sort data=lb05 out=base01;
+by usubjid lbcat lbtestcd lbdtc;
+
+where lborres ne '' and lbdtc le rfstdtc;
+run;
+
+
+data base02;
+set base01;
+by usubjid lbcat lbtestcd lbdtc;
+if last.lbtestcd;
+run;
+
+proc sort data=lb05;
+by usubjid lbcat lbtestcd lbdtc;
+run;
+
+
+
+data lb06;
+merge lb05(in=a) base02(in=b keep=usubjid lbcat lbtestcd lbdtc);
+by usubjid lbcat lbtestcd lbdtc;
+if b then lbblfl='Y';
+run;
+
+
+data lb07;
+set lb06;
+by usubjid lbcat lbtestcd lbdtc;
+retain lbseq 0;
+if first.usubjid then lbseq=1;
+else lbseq=lbseq+1;
+run;
+ 
+%let lbvars=STUDYID DOMAIN USUBJID LBSEQ LBTESTCD LBTEST LBCAT LBORRES LBORRESU LBORNRLO
+LBORNRHI LBSTRESC LBSTRESN LBSTRESU LBSTNRLO LBSTNRHI LBNRIND LBSPEC LBBLFL VISITNUM VISIT LBDTC LBDY
+;
+
+
+data lb;
+retain &lbvars;
+set lb07;
+keep &lbvars;
+run;
+
+
+
+
+
+

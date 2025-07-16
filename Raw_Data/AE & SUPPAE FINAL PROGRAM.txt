@@ -1,0 +1,172 @@
+
+libname AEraw "C:\Users\ashok pc\OneDrive\Desktop\SDTMIG Guidelines\AE\AE";
+
+proc copy in=AEraw out=work;
+run;
+
+data AE1;
+set adverse;
+STUDYID=left(study);
+DOMAIN="AE";
+USUBJID=catx('-',study,pt);
+AETERM=left(AEVT);
+AELLT=left(AELLT);
+AEDECOD=left(AEDECOD);
+AECAT=left(AECAT);
+AEBODSYS=left(AEBODSYS);
+AESEV=upcase(AESEV);
+PREDOSE=left(PREFDOSE);
+
+if upcase(AESER)='Yes' then aeser='y';
+else if upcase(AESER)='No' then aeser='n';
+if upcase(AEACN)='NO ACTION TAKEN' then AEACN='DOSE NOT CHANGED';
+else AEACN=upcase(AEACN);
+AEACNOTH=upcase(AEACNOTH);
+if upcase(AEREL)='yes' then aerel ='y';
+else if upcase(AEREL)='no' then aerel ='n';
+AEOUT=upcase(AEOUT);
+if upcase(SCONG)='yes' then AESCONG='Y';
+else if upcase(SCONG)='no' then AESCONG='n';
+
+if upcase(SDISAB)='yes' then AESDISAB='Y';
+else if upcase(SDISAB)='no' then AESDISAB='n';
+
+if upcase(SDEATH)='yes' then AESDTH='Y';
+else if upcase(SDEATH)='no' then AESDTH='n';
+
+if upcase(SHOSP)='yes' then AESHOSP='Y';
+else if upcase(SHOSP)='no' then AESHOSP='n';
+
+if upcase(SLIFE)='yes' then AESLIFE='Y';
+else if upcase(SLIFE)='no' then AESLIFE='n';
+
+if upcase(SMIE)='yes' then AESMIE='Y';
+else if upcase(SMIE)='no' then AESMIE='n';
+
+dayn=input(scan(AESTDT_RAW,1,"/"),??best.);
+if dayn ne . then stday=put(dayn,z2.);
+
+monthc=upcase(scan(AESTDT_RAW,2,'/'));
+if monthc='JAN' then stmonth='01';
+else if monthc='FEB' then stmonth='02';
+else if monthc='MAR' then stmonth='03';
+else if monthc='APR' then stmonth='04';
+else if monthc='MAY' then stmonth='05';
+else if monthc='JUN' then stmonth='06';
+else if monthc='JUL' then stmonth='07';
+else if monthc='AUG' then stmonth='08';
+else if monthc='SEP' then stmonth='09';
+else if monthc='OCT' then stmonth='10';
+else if monthc='NOV' then stmonth='11';
+else if monthc='DEC' then stmonth='12';
+else stmonth='';
+styear=scan(AESTDT_RAW,3,'/');
+AESTDTC=catx('-',styear,stmonth,stday);
+
+enddayn=input(scan(AEENDT_RAW,1,"/"),??best.);
+if enddayn ne . then enday=put(dayn,z2.);
+
+monthc=upcase(scan(AEENDT_RAW,2,'/'));
+if monthc='JAN' then enmonth='01';
+else if monthc='FEB' then enmonth='02';
+else if monthc='MAR' then enmonth='03';
+else if monthc='APR' then enmonth='04';
+else if monthc='MAY' then enmonth='05';
+else if monthc='JUN' then enmonth='06';
+else if monthc='JUL' then enmonth='07';
+else if monthc='AUG' then enmonth='08';
+else if monthc='SEP' then enmonth='09';
+else if monthc='OCT' then enmonth='10';
+else if monthc='NOV' then enmonth='11';
+else if monthc='DEC' then enmonth='12';
+else enmonth='';
+enyear=scan(AEENDT_RAW,3,'/');
+AEENDTC=catx('-',enyear,enmonth,enday);
+run;
+
+proc sort data=ae1;
+by  usubjid;
+run;
+proc sort data=dm out=dm(keep=studyid usubjid rfstdtc rfxendtc);
+by usubjid;
+run;
+
+
+data ae02;
+merge ae1(in=a) dm(in=b);
+by usubjid;
+if a;
+if length(aestdtc)=10 then aestdt=input(AESTDTC,?? yymmdd10.);
+if length(aeendtc)=10 then aeendt= input(AEENDTC, ?? yymmdd10.);
+if length(rfstdtc)=10 then rfstdt= input(rfstdtc, ?? yymmdd10.);
+if rfxendtc ne "" then rfxendtc15=input(substr(rfxendtc,1,10),??yymmdd10.)+15;
+
+if aestdt ne "" and rfstdt ne "" then do;
+if  aestdt >= rfstdt then AESTDY=(aestdt-rfstdt)+1;
+else if aestdt <= rfstdt then aestdy =(aestdt-rfstdt);
+else aestdy=.; 
+end; 
+
+if aeendt ne "" and rfstdt ne"" then do;
+if aeendt >= rfstdt then AEENDY = (aeendt-rfstdt)+ 1;
+else if  aeendt <= rfstdt then aeendy=(aeendt-rfstdt);
+else aeendy=.;
+end;
+if prefdose='Y' then aetrtem='N';
+else if aestdt>=rfstdt and aestdt < rfxendtc15 then aetrtem='Y';
+else aetrtem='N';
+run;
+
+
+proc sort data=ae02;
+by usubjid aestdtc aedecod ;
+run;
+
+
+proc sort data=se;
+by usubjid sestdtc seendtc;
+run;
+
+data ae03;
+merge ae02(in=a) se(in=b keep=sestdtc seendtc usubjid epoch);
+by usubjid;
+if a and sestdtc <= aestdtc <= seendtc then do;
+epoch = epoch; 
+end;
+if first.usubjid then AESEQ= 1;
+else AESEQ + 1;
+run;
+
+proc sort data=ae03; by studyid usubjid; run;
+proc transpose data=ae03 out=ae04(rename=(COL1=qval _NAME_=qnam  _LABEL_=qlabel));
+var prefdose aetrtem;
+by studyid usubjid aeseq;
+run;
+
+data suppae;
+set ae04;
+idvar=aeseq;
+idvarval=strip(put(aeseq, best.));
+qorign='crf';
+qeval='investigation';
+run;
+
+libname AE xport "C:\Users\ashok pc\OneDrive\Desktop\SDTM/AE.xpt";
+
+proc copy in=work out=AE;
+select ae03;
+run;
+libname suppae xport "C:\Users\ashok pc\OneDrive\Desktop\SDTM/suppae.xpt";
+
+proc copy in=work out=suppae;
+select suppae;
+run;
+
+
+
+proc printto log="C:\Users\ashok pc\OneDrive\Desktop\SDTM/aelog.txt";
+run;
+
+
+proc printto log="C:\Users\ashok pc\OneDrive\Desktop\SDTM/suppdaelog.txt";
+run;
