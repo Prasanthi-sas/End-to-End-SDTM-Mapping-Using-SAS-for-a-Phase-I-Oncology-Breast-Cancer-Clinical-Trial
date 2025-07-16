@@ -1,54 +1,75 @@
+# 📊 End-to-End SDTM Mapping for a Phase I Oncology Clinical Trial
+
+## 🧪 Project Overview
+
+This project demonstrates the end-to-end transformation of raw clinical trial data into CDISC-compliant SDTM datasets using **Base SAS**.  
+It focuses on a **Phase I open-label, multi-center, non-randomized oncology trial** involving subjects with solid tumors.
+
+Key SDTM domains implemented include standard domains like `DM`, `EX`, `LB`, as well as oncology-specific tumor domains `TU`, `TR`, and `RS`.
+
+## 🔍 Study Background
+
+- **Title**: Open-Label, Multi-Center, Non-Randomized Phase I Study  
+- **Therapeutic Area**: Oncology  
+- **Population**: Patients with solid tumors  
+- **Objective**: Evaluate safety and tumor response of an investigational product  
+
+## 🛠️ Tools & Standards
+
+- **Base SAS 9.4** – Data cleaning, transformation, derivation  
+- **Microsoft Excel** – Raw data and mapping specifications  
+- **CDISC SDTMIG v3.2** – Standard for SDTM compliance  
+
+## 📁 Project Structure
 End-to-End-SDTM-Mapping-Oncology/
-├── 📁 Raw_Data/
-│ ├── dm_synthetic.csv
-│ ├── ex_synthetic.csv
-│ ├── ae_synthetic.csv
-│ ├── tu_raw.xlsx
-│ ├── tr_raw.xlsx
-│ └── rs_raw.xlsx
-│
-├── 📁 Mapping_Specifications/
-│ ├── DM_Mapping_Spec.xlsx
-│ ├── TU_Mapping_Spec.xlsx
-│ ├── TR_Mapping_Spec.xlsx
-│ └── RS_Mapping_Spec.xlsx
-│
-├── 📁 SAS_Code/
-│ ├── DM_Mapping.sas
-│ ├── TU_Mapping.sas
-│ ├── TR_Mapping.sas
-│ └── RS_Mapping.sas
-│
-├── 📁 Output_SDTM/
-│ ├── dm.sas7bdat
-│ ├── tu.sas7bdat
-│ ├── tr.sas7bdat
-│ └── rs.sas7bdat
-│
-├── 📁 Documentation/
-│ ├── SDTM_Tumor_Domains_Overview.pdf
-│ ├── Project_Summary.docx
-│ └── Variable_Derivations.md
-│
-└── README.md
+├── Raw_Datasets/ # Raw mock Excel data (DM.xlsx, TU.xlsx, etc.)
+├── Mapping_Specifications/ # Mapping specs for each domain
+├── SAS_Code/ # All SAS scripts used for mapping and derivations
+├── Output_SDTM/ # Final SDTM datasets (.sas7bdat format)
+├── Documentation/ # Project write-up and study overview
+└── README.md # Project overview (this file)
 
 
- End-to-End-SDTM-Mapping-Using-SAS-for-a-Phase-I-Oncology-Breast-Cancer-Clinical-Trial
- This project showcases the complete SDTM mapping workflow for a Phase I **Oncology** clinical trial focused on **Breast Cancer**. Using **Base SAS**, I transformed raw clinical data into **CDISC-compliant SDTM datasets**, including both standard domains (DM, DS, EX, etc.) and oncology-specific domains such as TU, TR &amp;RS
- 
- ->>>>About This Project
-This project demonstrates the end-to-end SDTM mapping workflow for a Phase I Oncology Clinical Trial, specifically focused on Breast Cancer. It mimics an early-phase real-world trial setup where patient-level raw data is collected, cleaned, transformed, and mapped to CDISC SDTM standards using Base SAS.
 
-The trial aims to evaluate the safety and tumor response to an investigational drug in patients with solid tumors. The datasets include both general and oncology-specific domains such as:
+## 🧾 SDTM Domains Created
 
-DM: Demographics
-EX: Exposure
-DEATH: Death-related details
-TU: Tumor Identification
-TR: Tumor Measurements
-RS: Tumor Response
+| Domain | Description              | Key Variables                     |
+|--------|--------------------------|-----------------------------------|
+| DM     | Demographics             | AGE, SEX, RACE, USUBJID           |
+| EX     | Exposure                 | EXSTDAT, EXENDAT, EXDOSE          |
+| LB     | Laboratory Data          | LBTESTCD, LBORRES, LBDTC          |
+| TU     | Tumor Identification     | TUTESTCD, TULINKID, TUSEQ         |
+| TR     | Tumor Results            | TRTESTCD, TRORRES, TRSEQ          |
+| RS     | Tumor Response           | RSTESTCD, RSSTRESC, RSSEQ         |
 
-All transformations are done following SDTMIG v3.2 guidelines, especially the oncology tumor domains critical in regulatory submissions for cancer studies.
+
+## 🔄 Key Derivations
+
+- `USUBJID = STUDYID || "-" || SUBJECT`
+- `TUSEQ`, `TRSEQ`, and `RSSEQ` derived using `BY USUBJID` and `RETAIN`
+- `RFXSTDTC` derived from first dosing date (SPCPKB1 or EX)
+- Controlled terms mapped using conditional SAS logic
+
+
+## ✅ Validations
+
+- `PROC SORT` to eliminate duplicates and sort by key variables  
+- `PROC COMPARE` to validate derived vs raw datasets  
+- Manual review of sequencing and controlled terminology
+
+
+## 📌 Key Learnings
+
+- Implemented oncology-specific SDTM domains (TU, TR, RS)  
+- Applied CDISC standards with traceability and linkage (`TULINKID`, `TRLINKID`)  
+- Developed macro-driven workflows and improved SAS data step techniques  
+
+
+## 👩‍💻 Author
+
+**Prasanthi Kata**  
+Clinical SAS Programmer (Intern)  
+[GitHub Profile](https://github.com/Prasanthi-sas)
 
 
 
